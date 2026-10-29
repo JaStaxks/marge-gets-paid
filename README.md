@@ -78,7 +78,7 @@ flowchart LR
   orders --> pay[Pay page PayPal and Venmo]
   pay --> capture[Capture]
   paypal[PayPal webhook] --> verify[Signature check]
-  verify --> store[(JSON file or Upstash Redis)]
+  verify --> store[(JSON file or Redis)]
   capture --> store
   book --> store
   invoices --> store
@@ -138,11 +138,12 @@ The invoice is a real sandbox invoice emailed to `PAYPAL_SANDBOX_BUYER_EMAIL` (o
 | `DASHBOARD_PASSWORD` | | Owner desk password. Unset means `coastline` |
 | `APP_BASE_URL` | Yes, in production | Public origin used in the deposit link, for example `https://marge-gets-paid.vercel.app` |
 | `PAYPAL_SANDBOX_BUYER_EMAIL` | For the verify script | Sandbox personal account that receives the invoice |
-| `UPSTASH_REDIS_REST_URL` | On Vercel | Upstash Redis REST URL. `KV_REST_API_URL` is an alias |
-| `UPSTASH_REDIS_REST_TOKEN` | On Vercel | Upstash token. `KV_REST_API_TOKEN` is an alias |
+| `REDIS_URL` | On Vercel | TCP Redis URL (`redis://` or `rediss://`). Vercel Redis injects this. The Node `redis` client connects from the serverless function |
+| `UPSTASH_REDIS_REST_URL` | Optional | Upstash Redis REST URL. `KV_REST_API_URL` is an alias. Used when this pair is set, including when `REDIS_URL` is also set |
+| `UPSTASH_REDIS_REST_TOKEN` | With the REST URL | Upstash token. `KV_REST_API_TOKEN` is an alias |
 | `PAYPAL_FORCE_MOCK` | | Set to `1` to force the mock gateway |
 
-Local dev stores jobs in `data/store.json` (gitignored). Vercel's filesystem does not keep that file across requests. Connect free Upstash Redis before judges use the deployment. There is no Postgres dependency.
+Local dev stores jobs in `data/store.json` (gitignored). Vercel's filesystem does not keep that file across requests, so production needs Redis. A Vercel Redis store that sets `REDIS_URL` is enough. Upstash REST (`UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN`, or the `KV_REST_API_*` names) is the other supported path. There is no Postgres dependency.
 
 ## Sandbox buyer
 
@@ -174,7 +175,7 @@ Signature failures return 401 and do not store the event id, so PayPal can retry
 
 1. Import this GitHub repo as a Next.js project on the Hobby plan.
 2. Add the environment variables from the table. Point `APP_BASE_URL` at the deployment origin.
-3. Storage → Create database → Upstash Redis (free). Accept the injected `KV_REST_API_URL` and `KV_REST_API_TOKEN`, or copy the REST URL and token into the `UPSTASH_REDIS_REST_*` names.
+3. Connect Redis. Vercel Redis only needs the injected `REDIS_URL` (`redis://…`). Upstash from the Marketplace can instead inject `KV_REST_API_URL` and `KV_REST_API_TOKEN`, or you can set `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN`. If both styles are present, the REST pair is used.
 4. Deploy. Open `/`, book a job, and pay with the sandbox buyer.
 5. Register the webhook (above) and redeploy with `PAYPAL_WEBHOOK_ID`.
 6. From your laptop, run `node scripts/verify-sandbox.mjs` with the same three secrets.

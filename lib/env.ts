@@ -54,3 +54,21 @@ export function redisConfig(): { url: string; token: string } | null {
   if (!url || !token) return null;
   return { url: url.replace(/\/$/, ""), token };
 }
+
+export function redisTcpUrl(): string | null {
+  const url = (process.env.REDIS_URL || "").trim();
+  if (!/^rediss?:\/\//i.test(url)) return null;
+  return url;
+}
+
+export type StoreBackend = "upstash" | "redis" | "file";
+
+export function storeBackend(): StoreBackend {
+  if (redisConfig()) return "upstash";
+  if (redisTcpUrl()) return "redis";
+  return "file";
+}
+
+export function usesRedis(): boolean {
+  return storeBackend() !== "file";
+}

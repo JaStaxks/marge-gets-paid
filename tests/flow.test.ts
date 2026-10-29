@@ -12,6 +12,7 @@ import { parsePaypalBody } from "@/lib/paypal-parse";
 import { getPaypalGateway } from "@/lib/paypal";
 import { getPriceBookItem, linesFromNote, requirePriceBookItem } from "@/lib/price-book";
 import { runScriptedTurn } from "@/lib/scripted";
+import { setTcpRedisForTests } from "@/lib/redis-tcp";
 import { readStore, resetStore } from "@/lib/store";
 import type { UIMessage } from "ai";
 import { handlePaypalWebhook } from "@/lib/webhook";
@@ -27,6 +28,8 @@ beforeEach(async () => {
   delete process.env.UPSTASH_REDIS_REST_TOKEN;
   delete process.env.KV_REST_API_URL;
   delete process.env.KV_REST_API_TOKEN;
+  delete process.env.REDIS_URL;
+  setTcpRedisForTests(null);
   delete process.env.PAYPAL_SANDBOX_CLIENT_ID;
   delete process.env.PAYPAL_CLIENT_ID;
   delete process.env.PAYPAL_SANDBOX_CLIENT_SECRET;

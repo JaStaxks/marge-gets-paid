@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 
 import { cookieIsValid, DASHBOARD_COOKIE } from "@/lib/auth";
-import { redisConfig } from "@/lib/env";
+import { usesRedis } from "@/lib/env";
 import { jsonError } from "@/lib/http";
 import { kpis } from "@/lib/metrics";
 import { readStore } from "@/lib/store";
@@ -19,7 +19,7 @@ export async function GET() {
     return Response.json({
       jobs: data.jobs,
       kpis: kpis(data.jobs),
-      store: redisConfig() ? "redis" : "file",
+      store: usesRedis() ? "redis" : "file",
       seededAt: data.seededAt,
     });
   } catch (error) {
