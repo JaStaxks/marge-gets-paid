@@ -1,8 +1,8 @@
 import { advanceStatus, depositCentsFor, formatUsd } from "@/lib/money";
 import { getPaypalGateway } from "@/lib/paypal";
 import { getPriceBookItem, matchService, requirePriceBookItem } from "@/lib/price-book";
-import { slotsForModel } from "@/lib/slots";
-import { createId, payPath, updateStore } from "@/lib/store";
+import { matchSlot, slotsForModel } from "@/lib/slots";
+import { createId, payPath, readStore, updateStore } from "@/lib/store";
 import { AppError, type Job, type PayJobView, type TranscriptEntry } from "@/lib/types";
 
 export type Quote = {
@@ -33,7 +33,8 @@ export function quoteIssue(issue: string, serviceCode?: string): Quote {
 }
 
 export async function listOpenSlots() {
-  return updateStore((draft) => slotsForModel(draft.slots));
+  const data = await readStore();
+  return slotsForModel(data.slots);
 }
 
 function normalizePhone(phone: string): string {
@@ -67,15 +68,22 @@ export async function bookJob(input: {
   if (!service.bookable) throw new AppError(400, "That price-book item is billed after the visit, not booked on the phone.");
 
   return updateStore((draft) => {
+    const slot = matchSlot(draft.slots, input.slotId);
+    if (!slot) {
+      const open = slotsForModel(draft.slots)
+        .slice(0, 4)
+        .map((item) => `${item.id} (${item.label})`)
+        .join("; ");
+      throw new AppError(409, `No slot matches "${input.slotId}". Open slots: ${open}`);
+    }
     const existing = draft.jobs.find(
       (job) =>
         job.email === email &&
-        job.slotId === input.slotId &&
+        job.slotId === slot.id &&
         (job.status === "booked" || job.status === "deposit_pending"),
     );
     if (existing) return existing;
-    const slot = draft.slots.find((item) => item.id === input.slotId);
-    if (!slot || !slot.available) throw new AppError(409, "That slot was just taken. Offer another open slot.");
+    if (!slot.available) throw new AppError(409, "That slot was just taken. Offer another open slot.");
     slot.available = false;
     const now = new Date().toISOString();
     const job: Job = {

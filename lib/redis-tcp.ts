@@ -6,6 +6,7 @@ import { AppError } from "@/lib/types";
 export type TcpRedis = {
   get(key: string): Promise<string | null>;
   set(key: string, value: string): Promise<void>;
+  compareAndSet?(key: string, expected: string | null, value: string): Promise<boolean>;
 };
 
 let testClient: TcpRedis | null = null;
@@ -67,6 +68,38 @@ export async function tcpGet(key: string): Promise<string | null> {
   } catch (error) {
     if (error instanceof AppError) throw error;
     throw new AppError(502, `Redis read failed. ${safeRedisMessage(error)}`);
+  }
+}
+
+const COMPARE_AND_SET = `
+local current = redis.call('GET', KEYS[1])
+if ARGV[1] == '0' then
+  if current then return 0 end
+else
+  if current ~= ARGV[2] then return 0 end
+end
+redis.call('SET', KEYS[1], ARGV[3])
+return 1
+`;
+
+export async function tcpCompareAndSet(key: string, expected: string | null, value: string): Promise<boolean> {
+  try {
+    if (testClient?.compareAndSet) return await testClient.compareAndSet(key, expected, value);
+    if (testClient) {
+      const current = await testClient.get(key);
+      if (current !== expected) return false;
+      await testClient.set(key, value);
+      return true;
+    }
+    const redis = await liveClient();
+    const reply = await redis.eval(COMPARE_AND_SET, {
+      keys: [key],
+      arguments: [expected === null ? "0" : "1", expected ?? "", value],
+    });
+    return Number(reply) === 1;
+  } catch (error) {
+    if (error instanceof AppError) throw error;
+    throw new AppError(502, `Redis write failed. ${safeRedisMessage(error)}`);
   }
 }
 
