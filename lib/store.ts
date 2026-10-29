@@ -3,7 +3,7 @@ import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { appBaseUrl, redisConfig, sandboxBuyerEmail, storeBackend } from "@/lib/env";
-import { tcpGet, tcpSet } from "@/lib/redis-tcp";
+import { tcpCompareAndSet, tcpGet, tcpSet } from "@/lib/redis-tcp";
 import { depositCentsFor, priceLines } from "@/lib/money";
 import { getPriceBookItem, linesFromNote, requirePriceBookItem } from "@/lib/price-book";
 import { generateSlots } from "@/lib/slots";
@@ -229,18 +229,12 @@ async function writeRaw(data: StoreData): Promise<void> {
 
 let queue: Promise<void> = Promise.resolve();
 
-export async function updateStore<T>(mutator: (draft: StoreData) => T | Promise<T>): Promise<T> {
+function enqueue<T>(work: () => Promise<T>): Promise<T> {
   let result!: T;
   let failure: unknown;
   const run = queue.then(async () => {
     try {
-      let draft = await readRaw();
-      if (!draft) {
-        draft = createSeed();
-        await writeRaw(draft);
-      }
-      result = await mutator(draft);
-      await writeRaw(draft);
+      result = await work();
     } catch (error) {
       failure = error;
     }
@@ -249,12 +243,53 @@ export async function updateStore<T>(mutator: (draft: StoreData) => T | Promise<
     () => undefined,
     () => undefined,
   );
-  await run;
-  if (failure) throw failure;
+  return run.then(() => {
+    if (failure) throw failure;
+    return result;
+  });
+}
+
+async function mutateRedis<T>(mutator: (draft: StoreData) => T | Promise<T>): Promise<T> {
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const raw = await tcpGet(REDIS_KEY);
+    let draft: StoreData;
+    if (!raw) draft = createSeed();
+    else {
+      try {
+        draft = JSON.parse(raw) as StoreData;
+      } catch {
+        throw new AppError(500, "The Redis store value is not valid JSON.");
+      }
+    }
+    const next = structuredClone(draft);
+    const result = await mutator(next);
+    const payload = JSON.stringify(next);
+    if (raw === payload) return result;
+    const saved = await tcpCompareAndSet(REDIS_KEY, raw, payload);
+    if (saved) return result;
+  }
+  throw new AppError(503, "The board changed while saving. Try again.");
+}
+
+async function mutateLocal<T>(mutator: (draft: StoreData) => T | Promise<T>): Promise<T> {
+  let draft = await readRaw();
+  if (!draft) {
+    draft = createSeed();
+    await writeRaw(draft);
+  }
+  const result = await mutator(draft);
+  await writeRaw(draft);
   return result;
 }
 
+export async function updateStore<T>(mutator: (draft: StoreData) => T | Promise<T>): Promise<T> {
+  if (storeBackend() === "redis") return enqueue(() => mutateRedis(mutator));
+  return enqueue(() => mutateLocal(mutator));
+}
+
 export async function readStore(): Promise<StoreData> {
+  const existing = await readRaw();
+  if (existing) return existing;
   return updateStore((draft) => draft);
 }
 

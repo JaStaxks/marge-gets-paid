@@ -9,7 +9,7 @@ import {
 } from "ai";
 import { z } from "zod";
 
-import { geminiLanguageModel, geminiReady } from "@/lib/gemini";
+import { geminiLanguageModel, geminiReady, isGeminiQuotaError } from "@/lib/gemini";
 import { bookJob, createDepositForJob, listOpenSlots, quoteIssue } from "@/lib/jobs";
 import { formatUsd } from "@/lib/money";
 import { priceBookForPrompt } from "@/lib/price-book";
@@ -62,7 +62,8 @@ function margeTools() {
       execute: async ({ issue, serviceCode }) => guard(async () => quoteIssue(issue, serviceCode)),
     }),
     book_job: tool({
-      description: "Book the visit after the customer confirms a slot. Do not pass a price.",
+      description:
+        "Book the visit after the customer confirms a slot. Pass the slot id from list_open_slots. The spoken label, such as Thu, Oct 29, 9:00 AM, is also accepted. Do not pass a price.",
       inputSchema: z.object({
         customerName: z.string(),
         phone: z.string(),
@@ -70,7 +71,7 @@ function margeTools() {
         address: z.string(),
         issue: z.string(),
         serviceCode: z.string(),
-        slotId: z.string(),
+        slotId: z.string().describe("Slot id from list_open_slots, or the slot label shown to the customer."),
       }),
       execute: async (input, options) =>
         guard(async () => {
@@ -98,6 +99,108 @@ function margeTools() {
   };
 }
 
+async function scriptedChatResponse(messages: UIMessage[]): Promise<Response> {
+  try {
+    const turn = await runScriptedTurn(messages);
+    const stream = createUIMessageStream({
+      execute: ({ writer }) => {
+        writer.write({ type: "start" });
+        writer.write({ type: "start-step" });
+        writer.write({ type: "text-start", id: "marge" });
+        writer.write({ type: "text-delta", id: "marge", delta: turn.text });
+        writer.write({ type: "text-end", id: "marge" });
+        turn.tools.forEach((call, index) => {
+          const toolCallId = `scripted-${call.name}-${index}`;
+          writer.write({
+            type: "tool-input-available",
+            toolCallId,
+            toolName: call.name,
+            input: call.input ?? {},
+          });
+          writer.write({
+            type: "tool-output-available",
+            toolCallId,
+            output: call.output ?? {},
+          });
+        });
+        writer.write({ type: "finish-step" });
+        writer.write({ type: "finish", finishReason: "stop" });
+      },
+    });
+    return createUIMessageStreamResponse({ stream });
+  } catch (error) {
+    console.error("[marge] scripted", error instanceof Error ? error.message : "error");
+    return Response.json({ error: "Marge could not book that. Try again." }, { status: 500 });
+  }
+}
+
+function chunkType(chunk: unknown): string {
+  if (!chunk || typeof chunk !== "object" || !("type" in chunk)) return "";
+  return String(chunk.type);
+}
+
+async function modelChatResponse(messages: UIMessage[]): Promise<Response> {
+  let quota = false;
+  const result = streamText({
+    model: geminiLanguageModel(),
+    system: SYSTEM,
+    messages: await convertToModelMessages(messages),
+    tools: margeTools(),
+    stopWhen: stepCountIs(8),
+    maxRetries: 0,
+  });
+  const ui = result.toUIMessageStream({
+    onError: (error) => {
+      if (isGeminiQuotaError(error)) quota = true;
+      console.error("[marge] chat", error instanceof Error ? error.message : "error");
+      return "Marge lost the model for a moment. Send that again.";
+    },
+  });
+  const iterator = ui[Symbol.asyncIterator]();
+  const buffered: unknown[] = [];
+  try {
+    for (let i = 0; i < 8; i += 1) {
+      const next = await iterator.next();
+      if (next.done) break;
+      buffered.push(next.value);
+      const type = chunkType(next.value);
+      const errorText =
+        next.value && typeof next.value === "object" && "errorText" in next.value
+          ? String(next.value.errorText)
+          : "";
+      if (quota || (type === "error" && isGeminiQuotaError(new Error(errorText)))) {
+        quota = true;
+        break;
+      }
+      if (type === "error" || type === "text-start" || type === "text-delta" || type.startsWith("tool-")) break;
+    }
+  } catch (error) {
+    if (isGeminiQuotaError(error)) quota = true;
+    else throw error;
+  }
+  if (quota) {
+    await iterator.return?.();
+    console.error("[marge] gemini quota, using the scripted receptionist");
+    return scriptedChatResponse(messages);
+  }
+  const stream = new ReadableStream({
+    async start(controller) {
+      for (const chunk of buffered) controller.enqueue(chunk);
+      try {
+        while (true) {
+          const next = await iterator.next();
+          if (next.done) break;
+          controller.enqueue(next.value);
+        }
+        controller.close();
+      } catch (error) {
+        controller.error(error);
+      }
+    },
+  });
+  return createUIMessageStreamResponse({ stream });
+}
+
 export async function POST(req: Request) {
   let messages: UIMessage[];
   try {
@@ -110,56 +213,15 @@ export async function POST(req: Request) {
     return Response.json({ error: "Expected JSON." }, { status: 400 });
   }
 
-  if (!geminiReady()) {
-    try {
-      const turn = await runScriptedTurn(messages);
-      const stream = createUIMessageStream({
-        execute: ({ writer }) => {
-          writer.write({ type: "start" });
-          writer.write({ type: "start-step" });
-          writer.write({ type: "text-start", id: "marge" });
-          writer.write({ type: "text-delta", id: "marge", delta: turn.text });
-          writer.write({ type: "text-end", id: "marge" });
-          turn.tools.forEach((call, index) => {
-            const toolCallId = `scripted-${call.name}-${index}`;
-            writer.write({
-              type: "tool-input-available",
-              toolCallId,
-              toolName: call.name,
-              input: call.input ?? {},
-            });
-            writer.write({
-              type: "tool-output-available",
-              toolCallId,
-              output: call.output ?? {},
-            });
-          });
-          writer.write({ type: "finish-step" });
-          writer.write({ type: "finish", finishReason: "stop" });
-        },
-      });
-      return createUIMessageStreamResponse({ stream });
-    } catch (error) {
-      console.error("[marge] scripted", error instanceof Error ? error.message : "error");
-      return Response.json({ error: "Marge could not book that. Try again." }, { status: 500 });
-    }
-  }
+  if (!geminiReady()) return scriptedChatResponse(messages);
 
   try {
-    const result = streamText({
-      model: geminiLanguageModel(),
-      system: SYSTEM,
-      messages: await convertToModelMessages(messages),
-      tools: margeTools(),
-      stopWhen: stepCountIs(8),
-    });
-    return result.toUIMessageStreamResponse({
-      onError: (error) => {
-        console.error("[marge] chat", error instanceof Error ? error.message : "error");
-        return "Marge lost the model for a moment. Send that again.";
-      },
-    });
+    return await modelChatResponse(messages);
   } catch (error) {
+    if (isGeminiQuotaError(error)) {
+      console.error("[marge] gemini quota, using the scripted receptionist");
+      return scriptedChatResponse(messages);
+    }
     console.error("[marge] chat setup", error instanceof Error ? error.message : "error");
     return Response.json({ error: "Marge could not reach the model." }, { status: 500 });
   }
