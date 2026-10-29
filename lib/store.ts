@@ -2,7 +2,8 @@ import { randomBytes } from "node:crypto";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-import { appBaseUrl, redisConfig, sandboxBuyerEmail } from "@/lib/env";
+import { appBaseUrl, redisConfig, sandboxBuyerEmail, storeBackend } from "@/lib/env";
+import { tcpGet, tcpSet } from "@/lib/redis-tcp";
 import { depositCentsFor, priceLines } from "@/lib/money";
 import { getPriceBookItem, linesFromNote, requirePriceBookItem } from "@/lib/price-book";
 import { generateSlots } from "@/lib/slots";
@@ -178,10 +179,20 @@ async function redisCommand(command: unknown[]): Promise<unknown> {
 }
 
 async function readRaw(): Promise<StoreData | null> {
-  if (redisConfig()) {
+  const backend = storeBackend();
+  if (backend === "upstash") {
     const result = await redisCommand(["GET", REDIS_KEY]);
     if (typeof result !== "string" || result.length === 0) return null;
     return JSON.parse(result) as StoreData;
+  }
+  if (backend === "redis") {
+    const result = await tcpGet(REDIS_KEY);
+    if (!result) return null;
+    try {
+      return JSON.parse(result) as StoreData;
+    } catch {
+      throw new AppError(500, "The Redis store value is not valid JSON.");
+    }
   }
   try {
     const text = await readFile(storeFile(), "utf8");
@@ -193,8 +204,13 @@ async function readRaw(): Promise<StoreData | null> {
 }
 
 async function writeRaw(data: StoreData): Promise<void> {
-  if (redisConfig()) {
+  const backend = storeBackend();
+  if (backend === "upstash") {
     await redisCommand(["SET", REDIS_KEY, JSON.stringify(data)]);
+    return;
+  }
+  if (backend === "redis") {
+    await tcpSet(REDIS_KEY, JSON.stringify(data));
     return;
   }
   const file = storeFile();
@@ -206,7 +222,7 @@ async function writeRaw(data: StoreData): Promise<void> {
   } catch {
     throw new AppError(
       500,
-      "This server cannot store jobs on disk. On Vercel, add Upstash Redis and set UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN.",
+      "This server cannot store jobs on disk. On Vercel, set REDIS_URL from the Redis store, or set UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN.",
     );
   }
 }

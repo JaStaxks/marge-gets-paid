@@ -112,7 +112,7 @@ export function DashboardApp({
         <div>
           <p className="muted">{SHOP.name} · owner desk</p>
           <h1 style={{ fontFamily: "var(--font-display), Georgia, serif", margin: "4px 0" }}>Jobs on the board</h1>
-          <p className="muted">Store: {store === "redis" ? "Upstash Redis" : "local JSON file"}. The grid refreshes every few seconds.</p>
+          <p className="muted">Store: {store === "redis" ? "Redis" : "local JSON file"}. The grid refreshes every few seconds.</p>
         </div>
         <div className="board-actions">
           <button type="button" className="ghost" onClick={() => void refresh()}>
