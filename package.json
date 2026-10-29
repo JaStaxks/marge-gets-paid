@@ -1,0 +1,37 @@
+{
+  "name": "marge-gets-paid",
+  "version": "1.0.0",
+  "private": true,
+  "description": "AI receptionist that books HVAC and plumbing jobs, collects a PayPal or Venmo deposit, and invoices after the visit.",
+  "license": "MIT",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "verify:sandbox": "node scripts/verify-sandbox.mjs"
+  },
+  "dependencies": {
+    "@ai-sdk/google": "^3.0.0",
+    "@ai-sdk/react": "^3.0.0",
+    "@paypal/agent-toolkit": "^1.10.0",
+    "ag-grid-community": "^34.2.0",
+    "ag-grid-react": "^34.2.0",
+    "ai": "^6.0.0",
+    "next": "^15.5.6",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "zod": "^4.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.18.0",
+    "@types/react": "^19.1.13",
+    "@types/react-dom": "^19.1.9",
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
