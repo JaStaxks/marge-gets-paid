@@ -43,6 +43,67 @@ function LinkCell(props: ICellRendererParams<Job, string>) {
   );
 }
 
+const NARROW_QUERY = "(max-width: 860px)";
+
+function useNarrowScreen() {
+  const [narrow, setNarrow] = useState(() =>
+    typeof window !== "undefined" ? window.matchMedia(NARROW_QUERY).matches : false,
+  );
+  useEffect(() => {
+    const media = window.matchMedia(NARROW_QUERY);
+    const update = () => setNarrow(media.matches);
+    update();
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
+  return narrow;
+}
+
+function JobCards({
+  jobs,
+  selectedId,
+  onSelect,
+}: {
+  jobs: Job[];
+  selectedId: string | null;
+  onSelect: (id: string) => void;
+}) {
+  if (jobs.length === 0) return <p className="muted">No jobs on the board.</p>;
+  return (
+    <ul className="job-cards">
+      {jobs.map((job) => (
+        <li key={job.id} className={job.id === selectedId ? "job-card is-selected" : "job-card"}>
+          <button
+            type="button"
+            className="job-card-select"
+            onClick={() => onSelect(job.id)}
+            aria-pressed={job.id === selectedId}
+          >
+            <span className="job-card-top">
+              <strong>{job.customerName}</strong>
+              <span className={`chip chip-${job.status}`}>{statusLabel(job.status)}</span>
+            </span>
+            <span>{job.serviceName}</span>
+            <span className="muted">{job.slotLabel}</span>
+            <span>
+              Deposit {formatUsd(job.depositCents)}
+              {job.invoiceTotalCents != null ? ` · balance ${formatUsd(job.invoiceTotalCents)}` : ""}
+            </span>
+          </button>
+          <span className="job-card-links">
+            <a href={`/pay/${job.id}`}>Deposit page</a>
+            {job.invoiceUrl ? (
+              <a href={job.invoiceUrl} target="_blank" rel="noreferrer">
+                Invoice
+              </a>
+            ) : null}
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 export function DashboardApp({
   initialJobs,
   initialKpis,
@@ -60,6 +121,7 @@ export function DashboardApp({
   const [message, setMessage] = useState("");
   const [working, setWorking] = useState(false);
   const selected = jobs.find((job) => job.id === selectedId) ?? null;
+  const narrow = useNarrowScreen();
 
   async function refresh() {
     const response = await fetch("/api/jobs");
@@ -112,7 +174,7 @@ export function DashboardApp({
         <div>
           <p className="muted">{SHOP.name} · owner desk</p>
           <h1 style={{ fontFamily: "var(--font-display), Georgia, serif", margin: "4px 0" }}>Jobs on the board</h1>
-          <p className="muted">Store: {store === "redis" ? "Redis" : "local JSON file"}. The grid refreshes every few seconds.</p>
+          <p className="muted">Store: {store === "redis" ? "Redis" : "local JSON file"}. The board refreshes every few seconds.</p>
         </div>
         <div className="board-actions">
           <button type="button" className="ghost" onClick={() => void refresh()}>
@@ -167,19 +229,23 @@ export function DashboardApp({
           <strong>{formatUsd(totals.paidCents)}</strong>
         </article>
       </section>
-      <div className="grid-card">
-        <AgGridReact<Job>
-          theme={theme}
-          rowData={jobs}
-          columnDefs={columnDefs}
-          getRowId={(params) => params.data.id}
-          domLayout="autoHeight"
-          onRowClicked={(event) => {
-            if (event.data) setSelectedId(event.data.id);
-          }}
-          animateRows
-        />
-      </div>
+      {narrow ? (
+        <JobCards jobs={jobs} selectedId={selectedId} onSelect={setSelectedId} />
+      ) : (
+        <div className="grid-card">
+          <AgGridReact<Job>
+            theme={theme}
+            rowData={jobs}
+            columnDefs={columnDefs}
+            getRowId={(params) => params.data.id}
+            domLayout="autoHeight"
+            onRowClicked={(event) => {
+              if (event.data) setSelectedId(event.data.id);
+            }}
+            animateRows
+          />
+        </div>
+      )}
       {selected ? (
         <section className="detail">
           <article className="panel">
@@ -198,6 +264,9 @@ export function DashboardApp({
               Quote {formatUsd(selected.quoteCents)} · deposit {formatUsd(selected.depositCents)}
               {selected.orderVia ? ` · order via ${selected.orderVia}` : ""}
               {selected.paypalOrderId ? ` · ${selected.paypalOrderId}` : ""}
+            </p>
+            <p>
+              <a href={`/pay/${selected.id}`}>Open deposit page</a>
             </p>
             {selected.lines ? (
               <table className="lines">

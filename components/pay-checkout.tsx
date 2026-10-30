@@ -110,7 +110,7 @@ export function PayCheckout({ job, cancelled }: { job: PayJobView; cancelled: bo
             <div className="success" role="status">
               <strong>Deposit paid.</strong>
               <p>Marge has the visit on the board. The balance is invoiced after the technician finishes.</p>
-              <a href="/">Back to Marge</a>
+              <a className="pay-back" href="/">Back to Marge</a>
             </div>
           ) : (
             <>
@@ -148,7 +148,7 @@ export function PayCheckout({ job, cancelled }: { job: PayJobView; cancelled: bo
               ) : null}
             </>
           )}
-          <a href="/">Talk to Marge</a>
+          <a className="pay-back" href="/">Talk to Marge</a>
         </div>
       </article>
     </div>
