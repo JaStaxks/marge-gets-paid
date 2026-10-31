@@ -7,19 +7,29 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { depositButtonLabel, readableChatError, smsBodyWithoutLink } from "@/lib/chat-display";
 import { formatUsd } from "@/lib/money";
 import { SHOP } from "@/lib/shop";
-
-type SpeechResult = {
-  results: Array<Array<{ transcript: string }>>;
-};
-
-type SpeechRec = {
-  lang: string;
-  onresult: ((event: SpeechResult) => void) | null;
-  start: () => void;
-};
+import {
+  VOICE_LISTENING_MESSAGE,
+  VOICE_UNSUPPORTED_MESSAGE,
+  assistantSpeech,
+  attachDictation,
+  composeDictation,
+  queueSpeech,
+  prefersContinuousRecognition,
+  speechRecognitionCtor,
+  type DictationSession,
+  type SpeechHost,
+} from "@/lib/voice";
 
 const STARTERS = ["My water heater is leaking.", "The AC is running but the house will not cool.", "The kitchen drain is backing up."];
 const COMPOSER_LINES = 6;
+const GREETING = "Coastline, this is Marge. What is going on at the house, and when can we get in?";
+
+function makeUtterance(chunk: string, voice: SpeechSynthesisVoice | null): SpeechSynthesisUtterance {
+  const utterance = new SpeechSynthesisUtterance(chunk);
+  utterance.lang = voice?.lang || "en-US";
+  if (voice) utterance.voice = voice;
+  return utterance;
+}
 
 function textOf(part: { type: string; text?: string }): string {
   return part.type === "text" && part.text ? part.text : "";
@@ -46,26 +56,91 @@ export function ChatPanel({ demoMode, paypalMock }: { demoMode: boolean; paypalM
   const { messages, sendMessage, status, error, clearError } = useChat({ transport });
   const [input, setInput] = useState("");
   const [voiceOn, setVoiceOn] = useState(false);
+  const [listening, setListening] = useState(false);
+  const [voiceNote, setVoiceNote] = useState<string | null>(null);
   const spoken = useRef("");
   const logRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const pinnedRef = useRef(true);
+  const inputRef = useRef(input);
+  const sessionRef = useRef<DictationSession | null>(null);
+  const listeningRef = useRef(false);
+  const baseTextRef = useRef("");
+  const utterancesRef = useRef<SpeechSynthesisUtterance[]>([]);
+  const speechTimer = useRef<number | null>(null);
   const busy = status === "submitted" || status === "streaming";
   const canSend = !busy && input.trim().length > 0;
   const latest = messages[messages.length - 1];
-  const latestAssistantText =
-    latest?.role === "assistant" ? latest.parts.map((part) => textOf(part)).join("").trim() : "";
+  const latestAssistantText = latest?.role === "assistant" ? assistantSpeech(latest.parts) : "";
   const showTyping = busy && latestAssistantText.length === 0;
+  inputRef.current = input;
+
+  function endDictation(mode: "stop" | "cancel") {
+    listeningRef.current = false;
+    const session = sessionRef.current;
+    sessionRef.current = null;
+    if (!session) {
+      setListening(false);
+      return;
+    }
+    if (mode === "cancel") session.cancel();
+    else session.stop();
+  }
+
+  function speakLine(line: string, immediate: boolean) {
+    const synth = window.speechSynthesis;
+    if (!synth || !line || line === spoken.current) return;
+    if (speechTimer.current !== null) {
+      window.clearTimeout(speechTimer.current);
+      speechTimer.current = null;
+    }
+    try {
+      const queued = queueSpeech(
+        synth,
+        line,
+        makeUtterance,
+        (fn, delayMs) => {
+          speechTimer.current = window.setTimeout(fn, delayMs);
+        },
+        immediate,
+      );
+      spoken.current = line;
+      utterancesRef.current = queued;
+    } catch {
+      spoken.current = "";
+    }
+  }
+
+  function lineToSpeak(greetWhenQuiet: boolean): string {
+    const last = [...messages].reverse().find((message) => message.role === "assistant");
+    const line = last ? assistantSpeech(last.parts) : "";
+    if (line) return line;
+    if (greetWhenQuiet && !messages.some((message) => message.role === "assistant")) return GREETING;
+    return "";
+  }
 
   useEffect(() => {
-    if (!voiceOn || busy || typeof window === "undefined" || !window.speechSynthesis) return;
-    const last = [...messages].reverse().find((message) => message.role === "assistant");
-    const line = last?.parts.map((part) => textOf(part)).join(" ").trim() ?? "";
-    if (!line || line === spoken.current) return;
-    spoken.current = line;
-    window.speechSynthesis.cancel();
-    window.speechSynthesis.speak(new SpeechSynthesisUtterance(line));
-  }, [busy, messages, voiceOn]);
+    const synth = window.speechSynthesis;
+    if (!synth) return;
+    const cacheVoices = () => {
+      synth.getVoices();
+    };
+    cacheVoices();
+    synth.addEventListener("voiceschanged", cacheVoices);
+    return () => {
+      synth.removeEventListener("voiceschanged", cacheVoices);
+      sessionRef.current?.cancel();
+      sessionRef.current = null;
+      if (speechTimer.current !== null) window.clearTimeout(speechTimer.current);
+      utterancesRef.current = [];
+      synth.cancel();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!voiceOn || busy || listening) return;
+    speakLine(lineToSpeak(false), false);
+  }, [busy, listening, messages, voiceOn]);
 
   useLayoutEffect(() => {
     resizeComposer(composerRef.current);
@@ -90,24 +165,105 @@ export function ChatPanel({ demoMode, paypalMock }: { demoMode: boolean; paypalM
   function submit(text: string) {
     const trimmed = text.trim();
     if (!trimmed || busy) return;
+    endDictation("cancel");
+    window.speechSynthesis?.cancel();
+    utterancesRef.current = [];
     sendMessage({ text: trimmed });
     setInput("");
+    baseTextRef.current = "";
   }
 
   function listen() {
-    const host = window as Window & {
-      SpeechRecognition?: new () => SpeechRec;
-      webkitSpeechRecognition?: new () => SpeechRec;
-    };
-    const Ctor = host.SpeechRecognition || host.webkitSpeechRecognition;
-    if (!Ctor) return;
-    const rec = new Ctor();
-    rec.lang = "en-US";
-    rec.onresult = (event) => {
-      const heard = event.results[0]?.[0]?.transcript ?? "";
-      setInput((current) => (current ? `${current} ${heard}` : heard));
-    };
-    rec.start();
+    if (listeningRef.current || sessionRef.current) {
+      endDictation("stop");
+      return;
+    }
+    const host = window as Window & SpeechHost;
+    const Ctor = speechRecognitionCtor({
+      isSecureContext: host.isSecureContext,
+      SpeechRecognition: host.SpeechRecognition,
+      webkitSpeechRecognition: host.webkitSpeechRecognition,
+    });
+    if (!Ctor) {
+      setVoiceNote(VOICE_UNSUPPORTED_MESSAGE);
+      return;
+    }
+    window.speechSynthesis?.cancel();
+    utterancesRef.current = [];
+    baseTextRef.current = inputRef.current;
+    let recognition: InstanceType<typeof Ctor>;
+    try {
+      recognition = new Ctor();
+    } catch {
+      setVoiceNote(VOICE_UNSUPPORTED_MESSAGE);
+      return;
+    }
+    const session = attachDictation(
+      recognition,
+      {
+        onTranscript: (heard) => {
+          setInput(composeDictation(baseTextRef.current, heard));
+        },
+        onListening: (isListening) => {
+          listeningRef.current = isListening;
+          setListening(isListening);
+          if (isListening) setVoiceNote(null);
+        },
+        onMessage: (message) => setVoiceNote(message),
+      },
+      {
+        continuous: prefersContinuousRecognition(navigator.userAgent, navigator.maxTouchPoints, navigator.platform),
+      },
+    );
+    sessionRef.current = session;
+    if (!session.start()) {
+      sessionRef.current = null;
+      return;
+    }
+    listeningRef.current = true;
+    setListening(true);
+    setVoiceNote(null);
+  }
+
+  function toggleSpeak() {
+    const synth = window.speechSynthesis;
+    if (!synth) {
+      setVoiceNote(VOICE_UNSUPPORTED_MESSAGE);
+      return;
+    }
+    if (voiceOn) {
+      synth.cancel();
+      utterancesRef.current = [];
+      spoken.current = "";
+      if (speechTimer.current !== null) {
+        window.clearTimeout(speechTimer.current);
+        speechTimer.current = null;
+      }
+      setVoiceOn(false);
+      return;
+    }
+    setVoiceNote(null);
+    synth.resume();
+    synth.getVoices();
+    const line = lineToSpeak(true);
+    if (line) speakLine(line, true);
+    else {
+      const primer = new SpeechSynthesisUtterance(" ");
+      primer.volume = 0;
+      utterancesRef.current = [primer];
+      try {
+        synth.speak(primer);
+      } catch {
+        setVoiceNote(VOICE_UNSUPPORTED_MESSAGE);
+        return;
+      }
+    }
+    setVoiceOn(true);
+  }
+
+  function editComposer() {
+    if (!listeningRef.current) return;
+    endDictation("cancel");
   }
 
   return (
@@ -133,9 +289,7 @@ export function ChatPanel({ demoMode, paypalMock }: { demoMode: boolean; paypalM
         </p>
       ) : null}
       <div className="log" ref={logRef} aria-live="polite">
-        <div className="bubble assistant">
-          Coastline, this is Marge. What is going on at the house, and when can we get in?
-        </div>
+        <div className="bubble assistant">{GREETING}</div>
         {messages.map((message) => {
           const parts = message.parts.map((part, index) => {
             if (part.type === "text" && part.text?.trim()) {
@@ -226,6 +380,11 @@ export function ChatPanel({ demoMode, paypalMock }: { demoMode: boolean; paypalM
           submit(input);
         }}
       >
+        {listening || voiceNote ? (
+          <p className={listening ? "voice-status" : "voice-note"} id="voice-status" role={listening ? "status" : "alert"}>
+            {listening ? VOICE_LISTENING_MESSAGE : voiceNote}
+          </p>
+        ) : null}
         <label className="sr-only" htmlFor="marge-input">
           Message Marge
         </label>
@@ -234,7 +393,14 @@ export function ChatPanel({ demoMode, paypalMock }: { demoMode: boolean; paypalM
           ref={composerRef}
           rows={1}
           value={input}
-          onChange={(event) => setInput(event.target.value)}
+          className={listening ? "is-listening" : undefined}
+          aria-describedby={listening || voiceNote ? "voice-status" : undefined}
+          onPointerDown={editComposer}
+          onChange={(event) => {
+            setInput(event.target.value);
+            setVoiceNote(null);
+            editComposer();
+          }}
           onKeyDown={(event) => {
             if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing) return;
             event.preventDefault();
@@ -246,10 +412,22 @@ export function ChatPanel({ demoMode, paypalMock }: { demoMode: boolean; paypalM
           enterKeyHint="send"
         />
         <div className="composer-actions">
-          <button type="button" className="ghost" onClick={listen} aria-label="Dictate a message">
-            Mic
+          <button
+            type="button"
+            className={listening ? "mic-live" : "ghost"}
+            onClick={listen}
+            aria-pressed={listening}
+            aria-label={listening ? "Stop dictation" : "Dictate a message"}
+          >
+            {listening ? "Listening" : "Mic"}
           </button>
-          <button type="button" className={voiceOn ? "primary" : "ghost"} onClick={() => setVoiceOn((value) => !value)} aria-pressed={voiceOn}>
+          <button
+            type="button"
+            className={voiceOn ? "primary" : "ghost"}
+            onClick={toggleSpeak}
+            aria-pressed={voiceOn}
+            aria-label={voiceOn ? "Stop spoken replies" : "Speak Marge's replies"}
+          >
             Speak
           </button>
           <button className="primary" type="submit" disabled={!canSend}>
