@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Marge Gets Paid — motion</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,560;9..144,640&family=Outfit:wght@440;560;650&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --ink: #1c1712;
+      --navy: #123244;
+      --sea: #1f6f62;
+      --sand: #f3ecdf;
+      --paper: #fffaf3;
+      --line: #e4d7c6;
+      --muted: #4a4036;
+      --coral: #c85a3e;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; width: 1920px; height: 1080px; overflow: hidden; background: var(--sand); }
+    body {
+      font-family: Outfit, "Avenir Next", sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(900px 420px at 12% -10%, rgba(31, 111, 98, 0.16), transparent 55%),
+        linear-gradient(180deg, #f7f1e6 0%, #f3ecdf 46%, #efe4d4 100%);
+    }
+    .scene { position: absolute; inset: 0; display: none; }
+    body[data-scene="title"] #scene-title { display: flex; flex-direction: column; height: 1080px; }
+    body[data-scene="problem"] #scene-problem { display: grid; }
+    body[data-scene="rail"] #scene-rail { display: flex; flex-direction: column; height: 1080px; }
+    body[data-scene="end"] #scene-end { display: flex; flex-direction: column; height: 1080px; }
+    .eyebrow {
+      font-size: 22px;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--sea);
+      font-weight: 650;
+      margin: 0 0 18px;
+    }
+    h1, h2, .display { font-family: Fraunces, Georgia, serif; font-weight: 560; letter-spacing: -0.045em; margin: 0; }
+    #scene-title { padding: 108px 110px 88px; transform-origin: 50% 42%; }
+    #scene-title h1 { font-size: 156px; line-height: 0.88; color: var(--navy); }
+    #scene-title h1 span { display: block; }
+    #scene-title .sub { font-size: 34px; max-width: 28ch; margin: 28px 0 0; line-height: 1.25; color: var(--ink); }
+    .facts { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 18px; margin-top: auto; }
+    .fact {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      padding: 22px 26px 26px;
+      min-height: 148px;
+    }
+    .fact b { display: block; font-family: Fraunces, Georgia, serif; font-size: 64px; letter-spacing: -0.04em; line-height: 1; color: var(--navy); }
+    .fact span { display: block; margin-top: 8px; font-size: 26px; color: var(--muted); }
+    .fact.hot { border-color: var(--sea); box-shadow: inset 6px 0 0 var(--sea); }
+    .fact.hot b { color: var(--sea); }
+    #scene-problem { grid-template-columns: 1.05fr 0.95fr; gap: 56px; padding: 96px 100px 0; }
+    #scene-problem h2 { font-size: 92px; line-height: 0.92; color: var(--navy); max-width: 10ch; }
+    .dollars { font-family: Fraunces, Georgia, serif; font-size: 168px; line-height: 0.85; letter-spacing: -0.05em; color: var(--navy); margin: 18px 0 0; }
+    .diag { font-size: 32px; margin: 8px 0 0; }
+    .src { font-size: 22px; color: var(--muted); margin: 10px 0 0; max-width: 36ch; }
+    .stack { display: flex; flex-direction: column; gap: 12px; position: relative; height: 760px; }
+    .row {
+      height: 84px;
+      border-radius: 18px;
+      background: var(--paper);
+      border: 1px solid var(--line);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 22px;
+      font-size: 28px;
+      position: absolute;
+      left: 0; right: 0;
+    }
+    .row em { font-style: normal; color: var(--muted); font-size: 20px; letter-spacing: 0.08em; text-transform: uppercase; }
+    .row.keep { background: #f3faf7; border-color: var(--sea); height: 168px; align-items: flex-start; padding-top: 22px; flex-direction: column; justify-content: center; gap: 6px; }
+    .row.keep strong { font-family: Fraunces, Georgia, serif; font-size: 40px; font-weight: 560; color: var(--navy); }
+    .chip { display: inline-flex; align-items: center; background: var(--sea); color: #f6f1e8; border-radius: 999px; padding: 6px 14px; font-size: 22px; font-weight: 650; }
+    #scene-rail { padding: 96px 110px 80px; }
+    #scene-rail h2 { font-size: 84px; color: var(--navy); line-height: 0.98; max-width: 16ch; margin: 36px 0 0; }
+    .pills { display: flex; flex-wrap: wrap; gap: 14px; margin-top: auto; margin-bottom: 28px; }
+    .pills span { font-size: 30px; font-weight: 650; color: var(--navy); background: var(--paper); border: 1px solid var(--line); border-radius: 999px; padding: 14px 22px; }
+    .rail { position: relative; height: 200px; }
+    .rail-line { position: absolute; left: 36px; right: 36px; top: 28px; height: 4px; background: #d9cbb8; border-radius: 4px; }
+    .rail-line i { display: block; height: 100%; width: 0; background: var(--sea); border-radius: 4px; }
+    .nodes { display: grid; grid-template-columns: repeat(8, 1fr); position: relative; }
+    .node { text-align: center; }
+    .node .dot { width: 28px; height: 28px; border-radius: 50%; margin: 16px auto 14px; background: var(--paper); border: 3px solid #c7b6a2; }
+    .node.on .dot { background: var(--sea); border-color: var(--sea); transform: scale(1.25); }
+    .node p { margin: 0; font-size: 20px; line-height: 1.2; color: var(--muted); }
+    .node.on p { color: var(--navy); font-weight: 650; }
+    #scene-end { padding: 108px 120px 72px; transform-origin: 40% 45%; }
+    #scene-end h1 { font-size: 140px; line-height: 0.9; color: var(--navy); }
+    .end-chip {
+      position: absolute; right: 120px; top: 300px; width: 460px;
+      background: var(--paper); border: 1px solid var(--sea); border-radius: 28px;
+      padding: 28px 32px 32px; box-shadow: inset 8px 0 0 var(--sea);
+    }
+    .end-chip b { display: block; font-family: Fraunces, Georgia, serif; font-size: 92px; color: var(--sea); letter-spacing: -0.04em; line-height: 0.9; }
+    .end-chip span { display: block; margin-top: 10px; font-size: 28px; color: var(--ink); }
+    .url-block { margin-top: 48px; display: grid; gap: 22px; }
+    .url-block div { display: grid; grid-template-columns: 220px 1fr; align-items: baseline; gap: 18px; }
+    .url-block b { font-size: 22px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--sea); font-weight: 650; }
+    .url-block span { font-size: 48px; color: var(--navy); font-weight: 560; }
+    .fine { margin-top: auto; font-size: 26px; color: var(--muted); }
+  </style>
+</head>
+<body>
+  <section class="scene" id="scene-title">
+    <p class="eyebrow">Coastline Heating &amp; Plumbing · San Diego</p>
+    <h1><span>Marge</span><span>Gets Paid</span></h1>
+    <p class="sub">She books the job and collects the deposit before the truck rolls.</p>
+    <div class="facts">
+      <div class="fact"><b>$89</b><span>Water-heater diagnostic</span></div>
+      <div class="fact hot"><b>$49</b><span>Deposit holds the truck</span></div>
+      <div class="fact"><b>Book</b><span>Price book, not the model</span></div>
+    </div>
+  </section>
+  <section class="scene" id="scene-problem">
+    <div>
+      <p class="eyebrow">The missed call</p>
+      <h2>An empty driveway.</h2>
+      <p class="dollars">$89</p>
+      <p class="diag">Water heater leak diagnostic.</p>
+      <p class="src">From this shop’s price book. The model does not choose the dollars.</p>
+    </div>
+    <div class="stack" id="stack"></div>
+  </section>
+  <section class="scene" id="scene-rail">
+    <p class="eyebrow">How the money moves</p>
+    <h2 id="rail-sentence"></h2>
+    <div class="pills">
+      <span>Orders v2</span>
+      <span>Invoicing</span>
+      <span>Agent Toolkit</span>
+      <span>Webhooks</span>
+    </div>
+    <div class="rail">
+      <div class="rail-line"><i id="rail-fill"></i></div>
+      <div class="nodes" id="nodes"></div>
+    </div>
+  </section>
+  <section class="scene" id="scene-end">
+    <p class="eyebrow">PayPal AI Hackathon</p>
+    <h1>Marge<br />Gets Paid</h1>
+    <div class="url-block">
+      <div><b>Live desk</b><span>marge-gets-paid.vercel.app</span></div>
+      <div><b>Source</b><span>github.com/JaStaxks/marge-gets-paid</span></div>
+    </div>
+    <aside class="end-chip"><b>$49</b><span>Deposit before the truck rolls.</span></aside>
+    <p class="fine">Sandbox buttons only. No payment is completed in this film.</p>
+  </section>
+  <script>
+    const SENTENCES = [
+      "The customer types the leak on the live site.",
+      "Marge calls the shop tools on Gemini.",
+      "The server prices the book. $89 to visit. $49 to hold the truck.",
+      "Orders v2 opens the deposit. custom_id is the job id.",
+      "The PayPal JS SDK draws PayPal and Venmo.",
+      "Webhooks are signature-checked. A duplicate does nothing.",
+      "The owner desk keeps the status chip in AG Grid.",
+      "The Agent Toolkit sends the invoice. REST is the fallback."
+    ];
+    const LABELS = ["Chat", "Marge", "Price book", "Orders v2", "JS SDK", "Webhooks", "Owner desk", "Invoice"];
+    const nodes = document.getElementById("nodes");
+    LABELS.forEach((label) => {
+      const node = document.createElement("div");
+      node.className = "node";
+      node.innerHTML = `<div class="dot"></div><p>${label}</p>`;
+      nodes.appendChild(node);
+    });
+    const stack = document.getElementById("stack");
+    const missed = ["No answer", "No answer", "No answer", "No answer", "No answer"];
+    missed.forEach((text, index) => {
+      const row = document.createElement("div");
+      row.className = "row miss";
+      row.dataset.index = String(index);
+      row.innerHTML = `<strong>${text}</strong><em>Morning slot</em>`;
+      stack.appendChild(row);
+    });
+    const keep = document.createElement("div");
+    keep.className = "row keep";
+    keep.innerHTML = `<em>Held</em><strong>Tuesday · 9:00 AM</strong><span class="chip">$49 deposit</span><span class="src">A diagram, not a call log. One slot stays held.</span>`;
+    stack.appendChild(keep);
+
+    function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+    function smooth(t) { t = clamp(t, 0, 1); return t * t * (3 - 2 * t); }
+
+    const scenes = {
+      title(t) {
+        const node = document.getElementById("scene-title");
+        let scale = 1 + Math.min(t, 7.15) * 0.006;
+        let blur = 0;
+        let opacity = 1;
+        if (t > 7.15) {
+          const p = clamp((t - 7.15) / 1.85, 0, 1);
+          const e = p * p;
+          scale = 1.043 + e * 6;
+          blur = e * 16;
+          opacity = p < 0.5 ? 1 : 1 - (p - 0.5) / 0.5;
+        }
+        node.style.transform = `scale(${scale})`;
+        node.style.filter = `blur(${blur}px)`;
+        node.style.opacity = String(opacity);
+      },
+      problem(t) {
+        const rows = [...stack.querySelectorAll(".miss")];
+        const collapse = smooth((t - 3.1) / 2.6);
+        rows.forEach((row, index) => {
+          const restY = index * 96;
+          const y = restY * (1 - collapse);
+          const fade = 1 - collapse;
+          row.style.transform = `translateY(${y}px)`;
+          row.style.opacity = String(fade);
+        });
+        const keepY = (missed.length * 96) * (1 - collapse);
+        keep.style.height = `${210 + collapse * 500}px`;
+        keep.style.justifyContent = collapse > 0.85 ? "space-between" : "center";
+        keep.style.transform = `translateY(${keepY}px)`;
+        const push = 1 + clamp(t, 0, 14.2) * 0.0022;
+        document.getElementById("scene-problem").style.transform = `scale(${push})`;
+        document.getElementById("scene-problem").style.transformOrigin = "42% 46%";
+        let opacity = 1;
+        if (t > 14.4) opacity = 1 - clamp((t - 14.4) / 1.5, 0, 1);
+        document.getElementById("scene-problem").style.opacity = String(opacity);
+      },
+      rail(t) {
+        const slot = 18.2 / SENTENCES.length;
+        const index = clamp(Math.floor(t / slot), 0, SENTENCES.length - 1);
+        document.getElementById("rail-sentence").textContent = SENTENCES[index];
+        [...nodes.children].forEach((node, i) => node.classList.toggle("on", i === index));
+        const fill = ((index + 0.15) / (SENTENCES.length - 1)) * 100;
+        document.getElementById("rail-fill").style.width = `${clamp(fill, 4, 100)}%`;
+        const drift = 1 + t * 0.0028;
+        document.getElementById("scene-rail").style.transform = `scale(${drift})`;
+        document.getElementById("scene-rail").style.transformOrigin = "30% 40%";
+      },
+      end(t) {
+        const node = document.getElementById("scene-end");
+        node.style.transform = `scale(${1 + t * 0.004})`;
+        node.style.opacity = "1";
+      }
+    };
+
+    window.seek = (scene, t) => {
+      document.body.dataset.scene = scene;
+      scenes[scene](t);
+    };
+    window.seek("title", 0);
+  </script>
+</body>
+</html>
