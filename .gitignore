@@ -12,3 +12,6 @@ data/*.tmp
 tsconfig.tsbuildinfo
 .vercel
 .DS_Store
+demo-video/build/
+demo-video/raw/
+demo-video/source/__pycache__/
