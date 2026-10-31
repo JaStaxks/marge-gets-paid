@@ -6,7 +6,7 @@ const FPS = 30;
 const SCENES = [
   { name: "title", seconds: 9 },
   { name: "problem", seconds: 16 },
-  { name: "rail", seconds: 18.5 },
+  { name: "rail", seconds: 24.672 },
   { name: "end", seconds: 11 },
 ];
 const outRoot = "/tmp/marge-film/motion";

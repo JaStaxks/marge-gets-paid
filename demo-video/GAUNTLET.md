@@ -1,11 +1,11 @@
 # Gauntlet ledger
 
-Measured on `marge-gets-paid-demo.mp4` (2:26, 1920×1080, 60 fps).
+Measured on `marge-gets-paid-demo.mp4` (2:31, 1920×1080, 60 fps).
 
 | Check | Result |
 | --- | --- |
-| Frozen time (`scripts/frozen-time.sh`, threshold 0.35) | 0.7 s near-frozen across 146 s. Longest stretch about 0.4 s. Budget is about 1 s per 30 s, and no hold over 0.6 s except the end card. |
-| Loudness (`scripts/loudness.sh`) | Integrated −16.5 LUFS. Loudness range 6.7 LU. True peak −1.3 dBFS. |
+| Frozen time (`scripts/frozen-time.sh`, threshold 0.35) | 2.1 s near-frozen across 151 s, in isolated 0.1 s samples. Budget is about 1 s per 30 s, and no hold over 0.6 s except the end card. |
+| Loudness (`scripts/loudness.sh`) | Integrated −16.5 LUFS. Loudness range 6.5 LU. True peak −1.2 dBFS. |
 | Listening | Nobody listened. Levels are measured only. The bed is original (felt piano, 86 BPM, G major). Narration is edge-tts `en-US-JennyNeural`. Music fades out on the end card. |
 
 The loudness range is wider than the calm-score band in the kit (about 1.5–3 LU) because the voice sits forward and the bed drops between lines. Integrated loudness and true peak are on the calm target.
@@ -18,6 +18,12 @@ An independent pass on the storyboard (not the pixels) asked for four changes. W
 - The end card keeps both the live URL and the GitHub repo, because that is what the shoot asked for.
 - The title keeps the shop’s own line about collecting the deposit. The pay page says the payment is not completed.
 - The missed-call stack is type, and the held card says it is a diagram, not a call log.
+
+## Sync pass
+
+The rail narration is eight lines, one per highlighted step, in the same order as the dots: chat, Marge, price book, Orders v2, the PayPal SDK, webhooks, the owner desk, the Agent Toolkit. The headline on screen is the line being spoken.
+
+Helen Cho’s seed transcript already said “running.” A test locks that spelling. The desk shot is cropped larger so the word is readable. The half-typed “leaki” in the composer is cut, and the next frame shows “leaking.”
 
 ## What a pixel critic would still notice
 

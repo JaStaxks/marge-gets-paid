@@ -27,7 +27,16 @@ The owner desk is this same app, running locally. These rows are the sample boar
 Helen is sample data, already marked deposit paid. The technician note is priced from the book, and the deposit is credited. The gateway here is the mock. No card is charged.
 
 ## rail
-Orders version two holds the deposit. The Agent Toolkit creates and sends the invoice. The invoicing REST API is the fallback. Webhooks are checked before they touch the board. Marge collects the deposit while the customer is still in the chat.
+Spoken in order, one line per highlighted step:
+
+1. Chat. The customer types the leak in the chat.
+2. Marge. Marge calls the shop tools.
+3. Price book. The price book sets the dollars.
+4. Orders v2. Orders version two holds the deposit.
+5. JS SDK. The PayPal SDK draws the buttons.
+6. Webhooks. Webhooks are checked before they touch the board.
+7. Owner desk. The owner desk shows the status.
+8. Invoice. The Agent Toolkit sends the invoice.
 
 ## end
 Marge Gets Paid. The live desk is marge-gets-paid.vercel.app.

@@ -17,6 +17,14 @@ import { readStore, resetStore } from "@/lib/store";
 import type { UIMessage } from "ai";
 import { handlePaypalWebhook } from "@/lib/webhook";
 
+it("seeds Helen Cho's transcript with the word running", async () => {
+  const data = await resetStore();
+  const helen = data.jobs.find((job) => job.customerName === "Helen Cho");
+  const text = [helen?.issue, ...(helen?.transcript.map((entry) => entry.text) ?? [])].join(" ");
+  expect(text).toContain("Upstairs AC is running but the house will not cool.");
+  expect(text).not.toContain("runnging");
+});
+
 beforeEach(async () => {
   const dir = mkdtempSync(path.join(tmpdir(), "marge-test-"));
   process.env.STORE_PATH = path.join(dir, "store.json");

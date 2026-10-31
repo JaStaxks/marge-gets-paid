@@ -154,15 +154,17 @@
   </section>
   <script>
     const SENTENCES = [
-      "The customer types the leak on the live site.",
-      "Marge calls the shop tools on Gemini.",
-      "The server prices the book. $89 to visit. $49 to hold the truck.",
-      "Orders v2 opens the deposit. custom_id is the job id.",
-      "The PayPal JS SDK draws PayPal and Venmo.",
-      "Webhooks are signature-checked. A duplicate does nothing.",
-      "The owner desk keeps the status chip in AG Grid.",
-      "The Agent Toolkit sends the invoice. REST is the fallback."
+      "The customer types the leak in the chat.",
+      "Marge calls the shop tools.",
+      "The price book sets the dollars.",
+      "Orders version two holds the deposit.",
+      "The PayPal SDK draws the buttons.",
+      "Webhooks are checked before they touch the board.",
+      "The owner desk shows the status.",
+      "The Agent Toolkit sends the invoice."
     ];
+    // Durations match the narration clips, in seconds.
+    const SLOTS = [3.144, 2.640, 2.856, 3.144, 3.360, 3.408, 2.952, 3.168];
     const LABELS = ["Chat", "Marge", "Price book", "Orders v2", "JS SDK", "Webhooks", "Owner desk", "Invoice"];
     const nodes = document.getElementById("nodes");
     LABELS.forEach((label) => {
@@ -227,8 +229,16 @@
         document.getElementById("scene-problem").style.opacity = String(opacity);
       },
       rail(t) {
-        const slot = 18.2 / SENTENCES.length;
-        const index = clamp(Math.floor(t / slot), 0, SENTENCES.length - 1);
+        let index = 0;
+        let cursor = 0;
+        for (let i = 0; i < SLOTS.length; i += 1) {
+          if (t < cursor + SLOTS[i]) {
+            index = i;
+            break;
+          }
+          cursor += SLOTS[i];
+          index = i;
+        }
         document.getElementById("rail-sentence").textContent = SENTENCES[index];
         [...nodes.children].forEach((node, i) => node.classList.toggle("on", i === index));
         const fill = ((index + 0.15) / (SENTENCES.length - 1)) * 100;
