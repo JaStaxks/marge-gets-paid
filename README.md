@@ -4,9 +4,9 @@ An AI receptionist for a one-truck HVAC and plumbing shop. She books the visit, 
 
 **Coastline Heating & Plumbing, San Diego.** A missed morning is roughly a $89–$149 diagnostic plus the jobs that would have followed it. Marge will not put a truck on the schedule until the deposit order exists.
 
-This repo was written in October 2026 for the PayPal AI Hackathon. It does not reuse an older codebase. It stays free to run through 15 December 2026 on Vercel Hobby, the PayPal sandbox, and a free Gemini key.
+This repo was written after 1 October 2026 for the PayPal AI Hackathon. It does not reuse an older codebase. It stays free to run through 15 December 2026 on Vercel Hobby, the PayPal sandbox, and a free Gemini key.
 
-Live demo: add the Vercel URL here after deploy.
+Live demo: https://marge-gets-paid.vercel.app
 
 ![Marge books a deposit](docs/screenshots/chat.webp)
 
@@ -14,7 +14,7 @@ Live demo: add the Vercel URL here after deploy.
 
 1. Open `/` and tell Marge: "I'm Dana Ruiz, 619-555-0199, dana@example.com, 2100 Sunset Cliffs Blvd. My water heater is leaking. Tuesday at 9am works."
 2. Open the link in the text-message bubble. Pay the $49 deposit with the sandbox buyer below. PayPal and Venmo buttons both render.
-3. Open `/dashboard` (password `coastline` unless you set `DASHBOARD_PASSWORD`). The row reads Deposit paid.
+3. Open `/dashboard`. The owner password is `DASHBOARD_PASSWORD` (local default `coastline` if that variable is unset). Production uses a custom password — see [Sandbox testing](#sandbox-testing). The row reads Deposit paid.
 4. Select the job, paste `replaced anode rod, flushed tank, 1.5 hr`, and click **Mark complete and invoice**.
 5. Pay that invoice in the sandbox. The row reads Paid. **Reset demo** restores the sample board.
 
@@ -145,19 +145,31 @@ The invoice is a real sandbox invoice emailed to `PAYPAL_SANDBOX_BUYER_EMAIL` (o
 
 Local dev stores jobs in `data/store.json` (gitignored). Vercel's filesystem does not keep that file across requests, so production needs Redis. A Vercel Redis store that sets `REDIS_URL` is enough. Upstash REST (`UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN`, or the `KV_REST_API_*` names) is the other supported path. There is no Postgres dependency.
 
-## Sandbox buyer
+## Sandbox testing
 
-PayPal sandbox buyers belong to the developer account. This repo cannot ship a working password. Before you submit on Devpost, create or open the personal account and paste it here:
+Judges should use the **PayPal sandbox**, not a live PayPal login.
+
+### Owner desk
+
+Open https://marge-gets-paid.vercel.app/dashboard
 
 | | |
 | --- | --- |
-| Buyer email | `sb-________________@personal.example.com` |
-| Buyer password | `(show it in the dashboard, then paste it)` |
-| Where | [developer.paypal.com/dashboard/accounts](https://developer.paypal.com/dashboard/accounts) → Sandbox → Accounts → **Personal** → View/edit |
+| Dashboard password | **JACOB: paste the live `DASHBOARD_PASSWORD` here.** The documented local default (`coastline`) does **not** work on the production deploy. Do not commit a different secret than the one set on Vercel. |
 
-Judges pay with that personal account, not a live PayPal login. The sandbox **business** account owns the REST app and receives the money. Use a US buyer if you want the Venmo button to appear. The PayPal button is the reliable path either way.
+### PayPal sandbox buyer
 
-Sample rows already on the owner desk (Luis, Helen, Marcus, Priya) are labeled mock. They are there so the grid is not empty. A live charge starts with a new chat.
+PayPal sandbox buyers belong to the developer account that owns the REST app. This repo cannot ship a working buyer password. Before you submit on Devpost, open the personal (buyer) test account and paste it here:
+
+| | |
+| --- | --- |
+| Buyer email | **JACOB: paste** `sb-________________@personal.example.com` |
+| Buyer password | **JACOB: paste** (Sandbox → Accounts → Personal → View/edit account) |
+| Where | [developer.paypal.com/dashboard/accounts](https://developer.paypal.com/dashboard/accounts) → Sandbox → Accounts → **Personal** |
+
+The sandbox **business** account owns the REST app and receives the money. Use a US buyer if you want the Venmo button to appear. The PayPal button is the reliable path either way.
+
+Sample rows already on the owner desk (Luis, Helen, Marcus, Priya) are labeled mock. They are there so the grid is not empty. A live charge starts with a new chat on `/`.
 
 ## Webhook setup
 
